@@ -1,62 +1,41 @@
 package vn.bds360.backend.modules.media.service;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.PostConstruct;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import vn.bds360.backend.common.exception.AppException;
 import vn.bds360.backend.common.exception.ErrorCode;
-import vn.bds360.backend.modules.media.config.FileStorageProperties;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FileStorageService {
 
-    private final FileStorageProperties fileStorageProperties;
+    private final Cloudinary cloudinary;
 
-    // Mang hằng số quy định nghiệp vụ xuống Service
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of(
             "image/jpeg", "image/png", "image/gif", "image/webp",
             "image/bmp", "image/tiff", "image/heic", "image/avif", "image/apng");
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-
-    @PostConstruct
-    public void init() {
-        try {
-            Path path = Paths.get(fileStorageProperties.getUploadDir());
-            if (!Files.exists(path)) {
-                Files.createDirectories(path);
-                log.info(">>> Tạo thư mục lưu trữ thành công: {}", fileStorageProperties.getUploadDir());
-            }
-        } catch (Exception e) {
-            log.error(">>> Không thể tạo thư mục lưu trữ: {}. Lỗi: {}", fileStorageProperties.getUploadDir(),
-                    e.getMessage());
-        }
-    }
 
     // ==========================================
     // LƯU ẢNH (Có validate định dạng ảnh)
     // ==========================================
     public String storeImage(MultipartFile file) {
         validateFileSize(file);
-
         if (!ALLOWED_IMAGE_TYPES.contains(file.getContentType())) {
             throw new AppException(ErrorCode.FILE_FORMAT_INVALID);
         }
-
-        return executeSave(file);
+        return executeUpload(file, "bds360/images");
     }
 
     // ==========================================
@@ -64,7 +43,7 @@ public class FileStorageService {
     // ==========================================
     public String storeFile(MultipartFile file) {
         validateFileSize(file);
-        return executeSave(file);
+        return executeUpload(file, "bds360/files");
     }
 
     // ==========================================
@@ -76,20 +55,20 @@ public class FileStorageService {
         }
     }
 
-    private String executeSave(MultipartFile file) {
+    private String executeUpload(MultipartFile file, String folderName) {
         try {
-            String uniqueId = UUID.randomUUID().toString();
-            String originalFilename = file.getOriginalFilename();
-            String extension = StringUtils.getFilenameExtension(originalFilename);
-            String finalExtension = (extension != null && !extension.isEmpty()) ? "." + extension : "";
+            // Đẩy lên Cloudinary
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", folderName,
+                            "resource_type", "auto" // Tự động nhận diện ảnh/video/file thô
+                    ));
 
-            String fileName = uniqueId + finalExtension;
-            Path filePath = Paths.get(fileStorageProperties.getUploadDir()).resolve(fileName);
+            // Lấy URL an toàn (HTTPS) trả về
+            return uploadResult.get("secure_url").toString();
 
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-            return fileName;
         } catch (IOException e) {
-            log.error("Lỗi lưu file: {}", e.getMessage());
+            log.error(">>> Lỗi upload file lên Cloudinary: {}", e.getMessage());
             throw new AppException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }

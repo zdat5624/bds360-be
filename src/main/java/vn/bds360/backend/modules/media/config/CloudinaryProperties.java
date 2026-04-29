@@ -9,8 +9,9 @@ import lombok.Setter;
 @Getter
 @Setter
 @Configuration
-@ConfigurationProperties(prefix = "file")
-public class FileStorageProperties {
-    private String uploadDir;
-
+@ConfigurationProperties(prefix = "app.cloudinary")
+public class CloudinaryProperties {
+    private String cloudName;
+    private String apiKey;
+    private String apiSecret;
 }

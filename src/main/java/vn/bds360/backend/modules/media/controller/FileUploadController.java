@@ -8,8 +8,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-// Thêm thư viện này của Spring
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +21,7 @@ import vn.bds360.backend.modules.media.service.FileStorageService;
 @RequestMapping("/api/v1/media")
 @RequiredArgsConstructor
 @ApiGlobalResponse
-@Tag(name = "media", description = "Quản lý upload hình ảnh và tệp tin")
+@Tag(name = "media", description = "Quản lý upload hình ảnh và tệp tin lên Cloudinary")
 public class FileUploadController {
 
     private final FileStorageService fileStorageService;
@@ -33,10 +31,7 @@ public class FileUploadController {
         validateEmptyFiles(files);
 
         List<String> fileUrls = files.stream()
-                .map(file -> {
-                    String fileName = fileStorageService.storeFile(file);
-                    return buildFullUrl(fileName); // Biến tên file thành Full URL
-                })
+                .map(fileStorageService::storeFile) // Service giờ đã trả thẳng URL
                 .collect(Collectors.toList());
 
         return ApiResponse.success(fileUrls, "Upload tệp thành công");
@@ -47,28 +42,10 @@ public class FileUploadController {
         validateEmptyFiles(files);
 
         List<String> fileUrls = files.stream()
-                .map(file -> {
-                    String fileName = fileStorageService.storeImage(file);
-                    return buildFullUrl(fileName); // Biến tên file thành Full URL
-                })
+                .map(fileStorageService::storeImage) // Service giờ đã trả thẳng URL
                 .collect(Collectors.toList());
 
         return ApiResponse.success(fileUrls, "Upload ảnh thành công");
-    }
-
-    // ==========================================
-    // CÁC HÀM HELPER NỘI BỘ CHO CONTROLLER
-    // ==========================================
-
-    /**
-     * Hàm tự động lấy Domain hiện tại (vd: http://localhost:8080)
-     * ghép với đường dẫn /uploads/ và tên file.
-     */
-    private String buildFullUrl(String fileName) {
-        return ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/uploads/")
-                .path(fileName)
-                .toUriString();
     }
 
     private void validateEmptyFiles(List<MultipartFile> files) {

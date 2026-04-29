@@ -1,6 +1,5 @@
 package vn.bds360.backend.bootstrap;
 
-import java.io.InputStream;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -18,14 +17,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
 import vn.bds360.backend.common.config.AppProperties;
 import vn.bds360.backend.common.constant.ListingType;
 import vn.bds360.backend.common.constant.NotificationType;
@@ -96,55 +92,61 @@ public class StartupRunner implements CommandLineRunner {
 
         System.out.println(">>> START INIT DATABASE");
 
-        System.out.println(">>> INIT TABLE 'users': 1 ADMIN, 50 USER");
+        // System.out.println(">>> INIT TABLE 'users': 1 ADMIN, 50 USER");
 
-        if (this.userRepository.count() > 0) {
-            System.out.println(">>> SKIP! INIT TABLE 'users' : ALREADY HAVE DATA ... ");
-        } else {
-            initSampleUsers();
-        }
+        // if (this.userRepository.count() > 0) {
+        // System.out.println(">>> SKIP! INIT TABLE 'users' : ALREADY HAVE DATA ... ");
+        // } else {
+        // initSampleUsers();
+        // }
 
-        // Kiểm tra nếu database table provinces,dictrics,wars đã có dữ liệu thì không
-        // init
-        if (this.provinceRepository.count() > 0 || this.districtRepository.count() > 0
-                || this.wardRepository.count() > 0) {
-            System.out.println(
-                    ">>> SKIP! INIT ADDRESS DATA TABLE 'provinces', 'districs', 'wards': ALREADY HAVE DATA ... ");
-        } else {
-            try {
+        // // Kiểm tra nếu database table provinces,dictrics,wars đã có dữ liệu thì
+        // không
+        // // init
+        // if (this.provinceRepository.count() > 0 || this.districtRepository.count() >
+        // 0
+        // || this.wardRepository.count() > 0) {
+        // System.out.println(
+        // ">>> SKIP! INIT ADDRESS DATA TABLE 'provinces', 'districs', 'wards': ALREADY
+        // HAVE DATA ... ");
+        // } else {
+        // try {
 
-                ObjectMapper objectMapper = new ObjectMapper();
+        // ObjectMapper objectMapper = new ObjectMapper();
 
-                try (InputStream inputStream = new ClassPathResource("/data/address.json").getInputStream()) {
-                    List<CreateProvinceRequest> provinceDTOs = objectMapper.readValue(inputStream,
-                            new TypeReference<List<CreateProvinceRequest>>() {
-                            });
+        // try (InputStream inputStream = new
+        // ClassPathResource("/data/address.json").getInputStream()) {
+        // List<CreateProvinceRequest> provinceDTOs =
+        // objectMapper.readValue(inputStream,
+        // new TypeReference<List<CreateProvinceRequest>>() {
+        // });
 
-                    for (CreateProvinceRequest provinceDTO : provinceDTOs) {
-                        Province province = convertToEntity(provinceDTO);
-                        provinceRepository.save(province);
-                    }
-                    System.out.println(">>> INIT ADDRESS DATA TABLE provinces, districs, wards: SUCCESS");
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+        // for (CreateProvinceRequest provinceDTO : provinceDTOs) {
+        // Province province = convertToEntity(provinceDTO);
+        // provinceRepository.save(province);
+        // }
+        // System.out.println(">>> INIT ADDRESS DATA TABLE provinces, districs, wards:
+        // SUCCESS");
+        // } catch (Exception e) {
+        // e.printStackTrace();
+        // }
 
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
+        // } catch (Exception e) {
+        // e.printStackTrace();
+        // }
+        // }
 
-        initSampleCategories();
+        // initSampleCategories();
 
-        initSampleVips();
+        // initSampleVips();
 
-        initSamplePosts();
+        // initSamplePosts();
 
-        initSampleInteractions();
+        // initSampleInteractions();
 
-        initSampleTransactions();
+        // initSampleTransactions();
 
-        initSampleNotifications();
+        // initSampleNotifications();
 
         System.out.println(">>> END INIT DATABASE");
 
@@ -684,7 +686,13 @@ public class StartupRunner implements CommandLineRunner {
             if (selectedImageName.startsWith("http")) {
                 image.setUrl(selectedImageName);
             } else {
-                image.setUrl(baseImageUrl + selectedImageName);
+                // FIX NHANH: Biến "tên (số).jpg" thành "tên_số.jpg"
+                // để khớp với thực tế bác đã upload lên Cloudinary
+                String fixedName = selectedImageName
+                        .replace(" (", "_") // Thay " (" bằng "_"
+                        .replace(")", ""); // Xóa dấu ")"
+
+                image.setUrl(baseImageUrl + fixedName);
             }
 
             image.setOrderIndex(j);
@@ -752,7 +760,8 @@ public class StartupRunner implements CommandLineRunner {
         LegalStatus[] legalStatuses = LegalStatus.values();
         Furnishing[] furnishings = Furnishing.values();
 
-        String baseImageUrl = appProperties.getUrl().getBackend() + "/uploads/";
+        // Tìm dòng này và thay thế
+        String baseImageUrl = "https://res.cloudinary.com/dwdehgtoq/image/upload/f_auto,q_auto/";
         int totalPost = 1000;
         int numberOfThreads = 10;
 
