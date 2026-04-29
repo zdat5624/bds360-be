@@ -13,6 +13,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Tuple;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import vn.bds360.backend.common.constant.NotificationType;
 import vn.bds360.backend.common.constant.Role;
@@ -70,6 +75,7 @@ public class PostService {
     private final WardRepository wardRepository;
 
     private final PostViewHistoryRepository postViewHistoryRepository;
+    private final EntityManager entityManager;
 
     @Transactional
     public PostResponse createPost(User user, PostCreateRequest request) {
@@ -552,6 +558,38 @@ public class PostService {
         return PageResponse.of(pageImpl);
     }
 
+    // public List<MapPostResponse> getPostsForMap(PostFilterRequest filter) {
+    // // 1. Ép cứng các điều kiện cho bài đăng public hợp lệ
+    // filter.setIsApprovedOnly(true);
+    // filter.setIsDeleteByUser(false);
+    // filter.setIsHidden(false);
+
+    // // 2. Tái sử dụng toàn bộ logic filter phức tạp từ PostSpecification
+    // Specification<Post> baseSpec = PostSpecification.filterBy(filter);
+
+    // // 3. Nối thêm điều kiện đặc thù của Map: Phải có tọa độ (Lat/Lng không null)
+    // Specification<Post> mapSpec = baseSpec.and((root, query, cb) -> cb.and(
+    // cb.isNotNull(root.get("latitude")),
+    // cb.isNotNull(root.get("longitude"))));
+
+    // // 4. Lấy danh sách Entities và Map sang DTO
+    // List<Post> posts = postRepository.findAll(mapSpec);
+
+    // return posts.stream()
+    // .map(post -> new MapPostResponse(
+    // post.getLatitude(),
+    // post.getLongitude(),
+    // post.getId(),
+    // post.getVip().getId(),
+    // post.getPrice()))
+    // .toList();
+    // }
+
+    /**
+     * Lấy danh sách bài đăng để hiển thị lên bản đồ (Map)
+     * Tối ưu hóa: Tránh N+1 Query và chỉ Select 5 cột cần thiết bằng JPA Tuple
+     * (Chuẩn JPA 3.2+)
+     */
     public List<MapPostResponse> getPostsForMap(PostFilterRequest filter) {
         // 1. Ép cứng các điều kiện cho bài đăng public hợp lệ
         filter.setIsApprovedOnly(true);
@@ -566,16 +604,36 @@ public class PostService {
                 cb.isNotNull(root.get("latitude")),
                 cb.isNotNull(root.get("longitude"))));
 
-        // 4. Lấy danh sách Entities và Map sang DTO
-        List<Post> posts = postRepository.findAll(mapSpec);
+        // ==========================================
+        // 4. Tối ưu truy vấn bằng JPA Tuple (Khắc phục N+1 Query & Timeout)
+        // ==========================================
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<Post> root = query.from(Post.class);
 
-        return posts.stream()
-                .map(post -> new MapPostResponse(
-                        post.getLatitude(),
-                        post.getLongitude(),
-                        post.getId(),
-                        post.getVip().getId(),
-                        post.getPrice()))
+        // Chỉ SELECT đúng 5 cột cần thiết cho Frontend Mapbox (Chuẩn JPA 3.2)
+        query.select(cb.tuple(
+                root.get("latitude").alias("lat"),
+                root.get("longitude").alias("lng"),
+                root.get("id").alias("id"),
+                // Truy cập qua entity VIP
+                root.get("vip").get("id").alias("vipId"),
+                root.get("price").alias("price")));
+
+        // Áp dụng cái Specification (Mệnh đề WHERE) vào query này
+        query.where(mapSpec.toPredicate(root, query, cb));
+
+        // Thực thi truy vấn lấy ra danh sách các "Dòng" (Tuple)
+        List<Tuple> tuples = entityManager.createQuery(query).getResultList();
+
+        // 5. Map kết quả từ Tuple sang DTO để trả về
+        return tuples.stream()
+                .map(t -> new MapPostResponse(
+                        t.get("lat", Double.class),
+                        t.get("lng", Double.class),
+                        t.get("id", Long.class),
+                        t.get("vipId", Long.class),
+                        t.get("price", Long.class)))
                 .toList();
     }
 
